@@ -5,7 +5,7 @@ import time
 
 def send_data(sock, data1):
     # 准备数据
-    data = {'user': 'Hello, World!','cmd': 7,'groupId':'yuanda/node/cem'}  # 这是要发送的数据
+    data = {'user': 'HelloWorld','cmd': 7,'groupId':'yuanda/node/cem'}  # 这是要发送的数据
     data = json.dumps(data)  # 转化为JSON字符串
     data_length = len(data)  # 数据的长度
     

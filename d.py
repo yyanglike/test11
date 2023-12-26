@@ -29,7 +29,7 @@ async def send_data(ws):
             }
             
             data_json = json.dumps(data)  # 转换数据为JSON格式
-
+            
             # 发送数据
             await ws.send(data_json)
             await asyncio.sleep(0.0001)

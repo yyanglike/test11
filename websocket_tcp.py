@@ -116,6 +116,8 @@ class WebSocketClient:
 
             if opcode == 0x9:  # Ping frame
                 self.send_pong(payload)
+            elif opcode == 0xA:  # Pong frame
+                print('Received pong:', payload.decode('utf-8', 'ignore'))            
             elif opcode == 0x1:  # Text frame
                 return payload.decode('utf-8', 'ignore')
             
@@ -152,6 +154,16 @@ def recv_messages(client):
     except Exception as e:
         print(f"Error in recv_messages: {e}")
 
+def send_pings(client, interval=10):
+    try:
+        while client.running:
+            client.send_ping('ping')
+            time.sleep(interval)
+    except socket.error as e:
+        print(f"socket error:{e}")
+    except Exception as e:
+        print(f"Error in send_pings: {e}")
+
 # 使用示例
 client = WebSocketClient('localhost', 8765)
 client.handshake('/chat')
@@ -163,8 +175,14 @@ send_thread.start()
 recv_thread = threading.Thread(target=recv_messages, args=(client,))
 recv_thread.start()
 
+# 创建并启动发送ping的线程
+ping_thread = threading.Thread(target=send_pings, args=(client,))
+ping_thread.start()
+
 # 等待两个线程结束
 send_thread.join()
 recv_thread.join()
+ping_thread.join()
+
 
 client.close()

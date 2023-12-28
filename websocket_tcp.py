@@ -53,19 +53,6 @@ class WebSocketClient:
                 headers[key] = value
         return headers
 
-    # def send_text(self, message):
-    #     if len(message) > 65535:
-    #         raise ValueError("Message too long")
-    #     mask_key = struct.pack('!I', random.randint(0, 0xffffffff))
-    #     masked_message = bytes([b ^ mask_key[i % 4] for i, b in enumerate(message.encode('utf-8'))])
-    #     length = len(message)
-    #     if length <= 125:
-    #         self.sock.send(bytes([0x81, 0b10000000 | length]) + mask_key + masked_message)
-    #     elif length <= 65535:
-    #         self.sock.send(bytes([0x81, 0b10000000 | 126]) + struct.pack('!H', length) + mask_key + masked_message)
-    #     else:
-    #         self.sock.send(bytes([0x81, 0b10000000 | 127]) + struct.pack('!Q', length) + mask_key + masked_message)
-            
     def send_text(self, message):
         if len(message) > 65535:
             raise ValueError("Message too long")

@@ -7,6 +7,7 @@ import random
 import threading
 import time
 import re
+import threading
 from hashlib import sha1
 
 class WebSocketClient:
@@ -16,20 +17,33 @@ class WebSocketClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((host, port))
         self.running = True
+        self.write_lock = threading.Lock()
 
     def handshake(self, path='/'):
         key = base64.b64encode(os.urandom(16)).decode('utf-8')
         handshake = f'GET {path} HTTP/1.1\r\nHost: {self.host}:{self.port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n'
         self.sock.send(handshake.encode('utf-8'))
 
-        # 接收并解析服务器的响应
-        response = self.sock.recv(4096).decode('utf-8')
-        headers = self._parse_http_headers(response)
+        # 先接收HTTP响应的头部
+        headers = ''
+        while True:
+            data = self.sock.recv(1).decode('utf-8')
+            headers += data
+            if headers.endswith('\r\n\r\n'):
+                break
+
+        # 解析头部
+        headers = self._parse_http_headers(headers)
+
+        # 根据Content-Length接收响应体
+        content_length = int(headers.get('Content-Length', 0))
+        body = self.sock.recv(content_length).decode('utf-8')
 
         # 验证Sec-WebSocket-Accept头
         accept = headers.get('Sec-WebSocket-Accept')
         if accept != base64.b64encode(sha1((key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode()).digest()).decode():
             raise Exception("Invalid Sec-WebSocket-Accept header")
+
 
     def _parse_http_headers(self, response):
         headers = {}
@@ -62,20 +76,17 @@ class WebSocketClient:
         masked_message = bytes(b ^ mask[i % 4] for i, b in enumerate(message.encode('utf-8')))
 
         length = len(masked_message)
-        if length <= 125:
-            # 发送数据帧，第二个字节的最高位设置为1，表示使用了掩码
-            self.sock.send(bytes([0x81, 0b10000000 | length]) + mask + masked_message)
-        elif length <= 65535:
-            self.sock.send(bytes([0x81, 0b10000000 | 126]) + struct.pack('!H', length) + mask + masked_message)
-        else:
-            self.sock.send(bytes([0x81, 0b10000000 | 127]) + struct.pack('!Q', length) + mask + masked_message)
-            
+        with self.write_lock:
+            if length <= 125:
+                # 发送数据帧，第二个字节的最高位设置为1，表示使用了掩码
+                self.sock.send(bytes([0x81, 0b10000000 | length]) + mask + masked_message)
+            elif length <= 65535:
+                self.sock.send(bytes([0x81, 0b10000000 | 126]) + struct.pack('!H', length) + mask + masked_message)
+            else:
+                self.sock.send(bytes([0x81, 0b10000000 | 127]) + struct.pack('!Q', length) + mask + masked_message)
 
     def recv_text(self):
-        fin, opcode, payload = self._recv_frame()
-        if opcode == 0x1:
-            return payload.decode('utf-8', 'ignore')
-        return None
+        return self._recv_frame()
 
     def close(self):
         try:
@@ -90,24 +101,22 @@ class WebSocketClient:
         finally:
             self.sock.close()
 
+    def send_ping(self, payload=''):
+        if len(payload) > 125:
+            raise ValueError("Payload too long")
+        mask_key = struct.pack('!I', random.randint(0, 0xffffffff))
+        masked_payload = bytes([b ^ mask_key[i % 4] for i, b in enumerate(payload.encode('utf-8'))])
+        length = len(payload)
+        with self.write_lock:
+            self.sock.send(bytes([0x89, 0b10000000 | length]) + mask_key + masked_payload)
 
     def _recv_frame(self):
-        while self.running:
-            data = self.sock.recv(1)
-            if not data:
-                raise Exception("Connection closed")
-            fin = (ord(data) & 0b10000000) != 0
-            opcode = ord(data) & 0b00001111
-            if opcode == 0x9:  # Ping frame
-                # Send a Pong frame in response
-                self.sock.send(bytes([0x8A, 0x00]))
-                continue  # Continue to receive the next frame
-            elif opcode == 0x88:
-                self.close()
-                raise Exception("Received close frame")
-            data = self.sock.recv(1)
-            mask = (ord(data) & 0b10000000) != 0
-            length = ord(data) & 0b01111111
+        while True:
+            data = self.sock.recv(2)
+            fin = (data[0] & 0b10000000) != 0
+            opcode = data[0] & 0b00001111
+            mask = (data[1] & 0b10000000) != 0
+            length = data[1] & 0b01111111
             if length == 126:
                 length = struct.unpack('>H', self.sock.recv(2))[0]
             elif length == 127:
@@ -117,8 +126,23 @@ class WebSocketClient:
             payload = self.sock.recv(length)
             if mask:
                 payload = bytearray([payload[i] ^ mask_key[i % 4] for i in range(length)])
-            return fin, opcode, payload
 
+            if opcode == 0x9:  # Ping frame
+                self.send_pong(payload)
+            elif opcode == 0x1:  # Text frame
+                return payload.decode('utf-8', 'ignore')
+            
+    def send_pong(self, payload):
+        mask = struct.pack('!I', random.randint(0, 0xffffffff))
+        masked_payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+
+        length = len(masked_payload)
+        if length <= 125:
+            self.sock.send(bytes([0x8A, 0b10000000 | length]) + mask + masked_payload)
+        elif length <= 65535:
+            self.sock.send(bytes([0x8A, 0b10000000 | 126]) + struct.pack('!H', length) + mask + masked_payload)
+        else:
+            self.sock.send(bytes([0x8A, 0b10000000 | 127]) + struct.pack('!Q', length) + mask + masked_payload)
 
 def send_messages(client):
     try:

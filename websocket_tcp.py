@@ -137,7 +137,7 @@ def send_messages(client):
     try:
         while client.running:
             client.send_text('hello, world!')
-            time.sleep(1)
+            # time.sleep(1)
     except socket.error as e:
         print(f"socket error:{e}")
     except Exception as e:
@@ -148,7 +148,8 @@ def recv_messages(client):
         while client.running:
             message = client.recv_text()
             if message is not None:
-                print('Received:', message)
+                pass
+                # print('Received:', message)
     except socket.error as e:
         print(f"socket error:{e}")                            
     except Exception as e:

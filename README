@@ -3,3 +3,21 @@
 
  f.py对应于源达云tcp通信多次数据包测试。
  a.sh是一个压力生成的测试脚本。
+
+ Homebrew不允许直接通过pip安装Python包。解决这个问题的推荐方法是使用虚拟环境。以下是操作步骤：
+
+创建虚拟环境。在你的项目目录下运行以下命令：
+python3.12 -m venv myenv
+这个命令会在你的项目目录下创建一个名为myenv的虚拟环境。
+
+激活虚拟环境。运行以下命令：
+source myenv/bin/activate
+现在，你的命令行提示应该变成了(myenv)，表示你正在使用的是myenv虚拟环境。
+
+在虚拟环境中安装websockets。运行以下命令：
+pip install websockets
+现在，websockets应该已经在你的虚拟环境中安装好了。
+
+运行你的Python脚本。由于你正在使用的是虚拟环境，你应该使用虚拟环境中的Python解释器来运行你的脚本，而不是系统的Python解释器。你可以直接使用python命令来运行你的脚本，例如：
+python websocket_server_test.py
+当你不再需要使用虚拟环境时，你可以通过运行deactivate命令来退出虚拟环境。

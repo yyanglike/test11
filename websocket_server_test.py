@@ -3,7 +3,7 @@ import websockets
 
 async def echo(websocket, path):
     async for message in websocket:
-        print(message)
+        # print(message)
         await websocket.send(message)
 
 start_server = websockets.serve(echo, "localhost", 8765)

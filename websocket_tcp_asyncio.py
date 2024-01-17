@@ -22,7 +22,7 @@ class WebSocketClient:
 
         # 设置发送和接收缓冲区大小
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024)  # 1MB
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024 * 1024)  # 1MB
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024)  # 1MB
 
         # 将socket连接到目标地址
         sock.connect(('localhost', 8765))

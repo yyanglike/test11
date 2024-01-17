@@ -5,6 +5,8 @@ import os
 import struct
 import random
 from hashlib import sha1
+import socket
+from datetime import datetime
 
 class WebSocketClient:
     def __init__(self, host, port):
@@ -14,7 +16,25 @@ class WebSocketClient:
         self.writer = None
 
     async def connect(self):
-        self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
+        
+        # 创建一个自定义的socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # 设置发送和接收缓冲区大小
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024)  # 1MB
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024 * 1024)  # 1MB
+
+        # 将socket连接到目标地址
+        sock.connect(('localhost', 8765))
+
+        # 获取当前的事件循环
+        loop = asyncio.get_running_loop()
+        # 将socket转换为asyncio的StreamReader和StreamWriter
+        self.reader = asyncio.StreamReader()
+        protocol = asyncio.StreamReaderProtocol(self.reader)
+        transport, _ = await loop.create_connection(lambda: protocol, sock=sock)
+        self.writer = asyncio.StreamWriter(transport, protocol, self.reader, loop)      
+        # self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
         await self.handshake()
 
     async def handshake(self, path='/'):
@@ -41,10 +61,10 @@ class WebSocketClient:
     async def send_text(self, message):
         if len(message) > 65535:
             raise ValueError("Message too long")
-
+    
         mask = struct.pack('!I', random.randint(0, 0xffffffff))
         masked_message = bytes(b ^ mask[i % 4] for i, b in enumerate(message.encode('utf-8')))
-
+    
         length = len(masked_message)
         if length <= 125:
             self.writer.write(bytes([0x81, 0b10000000 | length]) + mask + masked_message)
@@ -52,7 +72,10 @@ class WebSocketClient:
             self.writer.write(bytes([0x81, 0b10000000 | 126]) + struct.pack('!H', length) + mask + masked_message)
         else:
             self.writer.write(bytes([0x81, 0b10000000 | 127]) + struct.pack('!Q', length) + mask + masked_message)
-        await self.writer.drain()
+        try:
+            await asyncio.wait_for(self.writer.drain(), timeout=10)
+        except asyncio.TimeoutError:
+            raise TimeoutError("Network write operation timed out")
 
     async def recv_text(self):
         while True:
@@ -94,15 +117,50 @@ class WebSocketClient:
         await self.writer.drain()
         self.writer.close()
         await self.writer.wait_closed()
+        
+async def send(client, event):
+    while not event.is_set():
+        try:
+            await client.send_text('hello, world!'*100)
+            now = datetime.now()
+            print(f'{now} Sends:')
+        except Exception as e:
+            print(f"Error occurred while sending: {e}")
+            event.set()
+            break
 
+
+async def recv(client, event):
+    while not event.is_set():
+        try:
+            now = datetime.now()
+            text = await client.recv_text()
+            print(f'{now} Received:', text[:5])
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"Error occurred while receiving: {e}")
+            event.set()
+            break
+        
 async def main():
     client = WebSocketClient('localhost', 8765)
     await client.connect()
 
-    while True:
-        await client.send_text('hello, world!')
-        print('Received:', await client.recv_text())
+    event = asyncio.Event()
 
-        await asyncio.sleep(1)
+    # 创建两个任务
+    send_task = asyncio.create_task(send(client, event))
+    recv_task = asyncio.create_task(recv(client, event))
 
+    try:
+        done, pending = await asyncio.wait([send_task, recv_task], return_when=asyncio.FIRST_EXCEPTION)
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        event.set()
+
+    for task in pending:
+        task.cancel()
+
+    # 等待两个任务都完成
+    await asyncio.gather(send_task, recv_task)
 asyncio.run(main())

@@ -102,14 +102,19 @@ class WebSocketClient:
     async def send_pong(self, payload):
         mask = struct.pack('!I', random.randint(0, 0xffffffff))
         masked_payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
-
+    
         length = len(masked_payload)
+        header = [0x8A]
         if length <= 125:
-            self.writer.write(bytes([0x8A, 0b10000000 | length]) + mask + masked_payload)
+            header.append(0b10000000 | length)
         elif length <= 65535:
-            self.writer.write(bytes([0x8A, 0b10000000 | 126]) + struct.pack('!H', length) + mask + masked_payload)
+            header.append(0b10000000 | 126)
+            header.extend(struct.pack('!H', length))
         else:
-            self.writer.write(bytes([0x8A, 0b10000000 | 127]) + struct.pack('!Q', length) + mask + masked_payload)
+            header.append(0b10000000 | 127)
+            header.extend(struct.pack('!Q', length))
+    
+        self.writer.write(bytes(header) + mask + masked_payload)
         await self.writer.drain()
 
     async def close(self):

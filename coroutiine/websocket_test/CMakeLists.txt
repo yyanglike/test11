@@ -1,13 +1,24 @@
 cmake_minimum_required(VERSION 3.10)
-project(WebSocketCoroutine)
+project(TcpClient)
 
 set(CMAKE_CXX_STANDARD 14)
 
-find_package(Boost REQUIRED COMPONENTS coroutine system thread)
-find_package(websocketpp CONFIG REQUIRED)
+include(FetchContent)
 
-include_directories(${Boost_INCLUDE_DIRS})
+FetchContent_Declare(
+  libuv
+  GIT_REPOSITORY https://github.com/libuv/libuv.git
+  GIT_TAG        v1.x
+)
 
-add_executable(WebSocketCoroutine main.cpp)
+FetchContent_GetProperties(libuv)
+if(NOT libuv_POPULATED)
+  FetchContent_Populate(libuv)
+  add_subdirectory(${libuv_SOURCE_DIR} ${libuv_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
-target_link_libraries(WebSocketCoroutine PRIVATE websocketpp::websocketpp ${Boost_LIBRARIES})
+add_executable(TcpClient a.cpp)
+target_link_libraries(TcpClient uv_a)
+
+add_executable(s s.cpp)
+target_link_libraries(s uv_a)

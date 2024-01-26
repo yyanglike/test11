@@ -25,7 +25,7 @@ class WebSocketClient:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024)  # 1MB
 
         # 将socket连接到目标地址
-        sock.connect(('localhost', 8765))
+        sock.connect(('localhost', 9002))
 
         # 获取当前的事件循环
         loop = asyncio.get_running_loop()
@@ -124,11 +124,15 @@ class WebSocketClient:
         await self.writer.wait_closed()
         
 async def send(client, event):
+    count = 0
     while not event.is_set():
         try:
             await client.send_text('hello, world!'*100)
-            now = datetime.now()
-            print(f'{now} Sends:')
+            await asyncio.sleep(1)
+            count += 1
+            if count % 10000 == 0:
+                now = datetime.now()
+                print(f'{now} Sends:')
         except Exception as e:
             print(f"Error occurred while sending: {e}")
             event.set()
@@ -136,19 +140,23 @@ async def send(client, event):
 
 
 async def recv(client, event):
+    count = 0
     while not event.is_set():
         try:
             now = datetime.now()
             text = await client.recv_text()
-            print(f'{now} Received:', text[:5])
+            count += 1
+            if count % 10000 == 0:
+                print(f'{now} Received:', text[:5])
             await asyncio.sleep(1)
         except Exception as e:
             print(f"Error occurred while receiving: {e}")
             event.set()
             break
+
         
 async def main():
-    client = WebSocketClient('localhost', 8765)
+    client = WebSocketClient('localhost', 9002)
     await client.connect()
 
     event = asyncio.Event()

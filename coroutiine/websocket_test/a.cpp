@@ -16,6 +16,7 @@ private:
     bool is_closing = false; // add this line
 
     std::mutex queue_mutex;
+    std::mutex data_mutex;  // add this line
     struct sockaddr_in dest;
     std::function<void(const std::string&)> on_data_received;
     std::string partial_msg; // Used to store part of a message in case of a sticky package
@@ -26,13 +27,15 @@ private:
     }
 
     static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
+        TcpClient* self = (TcpClient*)client->data;
+        std::lock_guard<std::mutex> lock(self->data_mutex);  // add this line        
         if (nread < 0) {
             if (nread == UV_EOF) {
                 fprintf(stderr, "Server closed the connection\n");
                 TcpClient* self = (TcpClient*)client->data;
-                if (!self->is_closing) { // check if the connection is closing
-                    self->is_closing = true; // set the flag
-                    uv_close((uv_handle_t*)client, on_close); // Close the client and reconnect
+                if (!self->is_closing) { 
+                    self->is_closing = true; 
+                    uv_close((uv_handle_t*)client, on_close); 
                 }
             } else {
                 fprintf(stderr, "Read error %s\n", uv_err_name(nread));
@@ -43,33 +46,45 @@ private:
         }
 
         if (nread == 0) {
-            // EAGAIN or EWOULDBLOCK
             free(buf->base);
             return;
         }
 
         std::string data(buf->base, nread);
-        TcpClient* self = (TcpClient*)client->data;
         self->partial_msg += data;
-        while (self->partial_msg.size() >= 8) { // Check if we have enough data to read the length
-            if (self->partial_msg.substr(0, 4) != "AAAA") {
-                self->partial_msg = self->partial_msg.substr(1); // Skip one byte
-                continue;
-            }
 
-            uint32_t msg_len = *(uint32_t*)self->partial_msg.substr(4, 4).c_str();
-            if (self->partial_msg.size() >= 8 + msg_len) { // Check if we have a full message
-                std::string msg = self->partial_msg.substr(8, msg_len);
-                if (self->on_data_received) {
-                    self->on_data_received(msg);
-                }
-                self->partial_msg = self->partial_msg.substr(8 + msg_len); // Remove the message from the buffer
-            } else {
+        while (self->partial_msg.size() >= 8) { 
+            size_t pos = self->partial_msg.find("AAAA");
+            if (pos == std::string::npos) {
+                self->partial_msg.clear(); // No "AAAA" found, discard the data
                 break;
             }
+            if (pos > 0) {
+                self->partial_msg = self->partial_msg.substr(pos); // Discard data before "AAAA"
+            }
+
+            uint32_t msg_len = *(uint32_t*)(self->partial_msg.data() + 4); 
+            if (self->partial_msg.size() < 8 + msg_len) { 
+                break;
+            }
+            std::string msg = self->partial_msg.substr(8, msg_len);
+            if (self->on_data_received) {
+                self->on_data_received(msg);
+            }
+            self->partial_msg = self->partial_msg.substr(8 + msg_len); 
+
+            // Immediately search for the next "AAAA" after reading a message
+            pos = self->partial_msg.find("AAAA");
+            if (pos != std::string::npos && pos != 0) { // Check if "AAAA" is found and not at the beginning
+                self->partial_msg = self->partial_msg.substr(pos); // Discard data before "AAAA"
+            }
         }
+
+
         free(buf->base);
     }
+
+
 
     static void on_connect(uv_connect_t* req, int status) {
         if (status < 0) {
@@ -169,6 +184,7 @@ public:
 
     void write(const std::string& data) {
         std::lock_guard<std::mutex> lock(queue_mutex);
+        std::lock_guard<std::mutex> lock_data(data_mutex);  // add this line
         write_queue.push(data);
 
         if (write_queue.size() == 1) {
@@ -193,9 +209,10 @@ int main() {
     timer.data = &client;
     uv_timer_start(&timer, [](uv_timer_t* handle) {
         auto client = static_cast<TcpClient*>(handle->data);
-        client->write("Hello, World!");
+        auto time = std::time(nullptr);
+        auto timestamp = std::to_string(time);
+        client->write("Hello, World! Time: " + timestamp);
     }, 1000, 1);
     client.run();
-
     return 0;
 }

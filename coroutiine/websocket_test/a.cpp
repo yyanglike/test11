@@ -22,8 +22,7 @@ private:
     std::string partial_msg; // Used to store part of a message in case of a sticky package
 
     static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-        buf->base = (char*) malloc(suggested_size);
-        buf->len = suggested_size;
+        *buf = uv_buf_init((char*)malloc(suggested_size), suggested_size);
     }
 
     static void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
@@ -146,8 +145,16 @@ private:
             return;
         }
 
-        std::string data = write_queue.front();
-        write_queue.pop();
+        std::string data;
+        int total_size = 0;
+        while (!write_queue.empty() && total_size <= 100 * 1024) { // 100K
+            std::string msg = write_queue.front();
+            int msg_len = msg.size();
+            data += "AAAA" + std::string((char*)&msg_len, 4) + msg;
+            total_size += msg_len + 4 + 4; // 4 bytes for "AAAA", 4 bytes for msg_len
+            write_queue.pop();
+        }
+
 
         uint32_t msg_len = data.size();
         std::string msg = "AAAA" + std::string((char*)&msg_len, 4) + data; // Prepend the length to the message
@@ -175,6 +182,13 @@ public:
         uv_tcp_init(loop, &socket);
         socket.data = this;
         connect_req.data = this;
+    }
+
+    ~TcpClient() { // Destructor to free resources
+        uv_loop_close(loop);
+        while (!write_queue.empty()) {
+            write_queue.pop();
+        }
     }
 
     void connect(const char* ip, int port) {

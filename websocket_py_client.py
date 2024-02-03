@@ -12,7 +12,7 @@ async def recv_msg(websocket):
         print(f"Received: {msg}")
 
 async def main():
-    uri = "ws://localhost:9002"
+    uri = "ws://localhost:8080/ws/test"
     async with websockets.connect(uri) as websocket:
         # 创建并启动两个协程
         task1 = asyncio.create_task(send_msg(websocket))

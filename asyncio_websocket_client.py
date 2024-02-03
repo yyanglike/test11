@@ -14,11 +14,12 @@ async def receive_messages(websocket):
     while True:
         # 接收消息
         response = await websocket.recv()
-        # print(f"Received from server: {response}")
+        print(f"Received from server: {response}")
         # await asyncio.sleep(0.0001)  # 加入延迟
 
 async def client():
     uri = "ws://localhost:9000"
+    uri = "wss://a.yd.com.cn:8080/ws/test"
     while True:
         try:
             async with websockets.connect(uri) as websocket:

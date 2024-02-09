@@ -24,6 +24,10 @@ async def main(
     else:
         port = 443
 
+    request_counter = 0
+    response_counter = 0
+    start_time = time.time()
+
     while True:  # add an outer loop for reconnection
         try:
             connect_coroutine = connect(
@@ -47,14 +51,18 @@ async def main(
                                     content=data.encode(),
                                     headers={"content-type": "application/x-www-form-urlencoded"},
                                 )
+                                request_counter += 1
                             else:
                                 try:
                                     response = await asyncio.wait_for(client.get(url), timeout=5.0)
+                                    request_counter += 1
                                 except asyncio.TimeoutError:
                                     print("Connection timeout, reconnecting...")
                                     break
 
                             elapsed = time.time() - start
+                            response_counter += 1
+
                             # print speed
                             octets = len(response.content)
                             print(
@@ -63,7 +71,10 @@ async def main(
                             )
                             # print content
                             print("Content:", response.text)
-                            await asyncio.sleep(10)  # sleep for 10 seconds
+                            # print request and response count per second
+                            print("Requests per second: ", request_counter / (time.time() - start_time))
+                            print("Responses per second: ", response_counter / (time.time() - start_time))
+                            # await asyncio.sleep(10)  # sleep for 10 seconds
 
                     except Exception as e:
                         print("Error occurred during request:", e)

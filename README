@@ -21,3 +21,15 @@ pip install websockets
 运行你的Python脚本。由于你正在使用的是虚拟环境，你应该使用虚拟环境中的Python解释器来运行你的脚本，而不是系统的Python解释器。你可以直接使用python命令来运行你的脚本，例如：
 python websocket_server_test.py
 当你不再需要使用虚拟环境时，你可以通过运行deactivate命令来退出虚拟环境。
+
+
+
+pip install -r requirements.txt
+
+
+If you do not have Python 3.8 installed, you will need to install it. Here's how you can do it:
+
+Update homebrew: brew update
+Install pyenv: brew install pyenv
+Install Python 3.8: pyenv install 3.8.12
+Set Python 3.8 as the global version: pyenv global 3.8.12

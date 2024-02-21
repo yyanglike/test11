@@ -65,15 +65,15 @@ async def main(
 
                             # print speed
                             octets = len(response.content)
-                            print(
-                                "Received %d bytes in %.1f s (%.3f Mbps)"
-                                % (octets, elapsed, octets * 8 / elapsed / 1000000)
-                            )
+                            # print(
+                            #     "Received %d bytes in %.1f s (%.3f Mbps)"
+                            #     % (octets, elapsed, octets * 8 / elapsed / 1000000)
+                            # )
                             # print content
-                            print("Content:", response.text)
-                            # print request and response count per second
-                            print("Requests per second: ", request_counter / (time.time() - start_time))
-                            print("Responses per second: ", response_counter / (time.time() - start_time))
+                            # print("Content:", response.text)
+                            # # print request and response count per second
+                            # print("Requests per second: ", request_counter / (time.time() - start_time))
+                            # print("Responses per second: ", response_counter / (time.time() - start_time))
                             # await asyncio.sleep(10)  # sleep for 10 seconds
 
                     except Exception as e:
